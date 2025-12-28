@@ -1,9 +1,6 @@
 use std::fs::read_to_string;
 use std::ops::RangeInclusive;
-
 use anyhow::{Ok, Result, anyhow};
-use itertools::Itertools;
-use num::Integer;
 
 fn parse(input: &str) -> Result<Vec<RangeInclusive<u64>>> {
     input
@@ -21,15 +18,9 @@ fn is_invalid_id_part1(id: &u64) -> bool {
     id.len().is_multiple_of(2) && id[..id.len() / 2] == id[id.len() / 2..]
 }
 fn is_invalid_id_part2(id: &u64) -> bool {
-    if is_invalid_id_part1(id) {
-        return true
-    }
-    let id = id.to_string();
-    let char_stats = id.chars().counts();
-    let min_val = char_stats.values().min().copied().expect("char_stats not empty");
-    let chunk_size = id.len().gcd(&min_val);
-    if chunk_size == 1 { return false }
-    id.as_bytes().chunks(id.len() / chunk_size).all_equal()
+    let id_str = id.to_string();
+    let double_id_str = id_str.repeat(2);
+    double_id_str[1..double_id_str.len()-1].contains(&id_str)
 }
 
 fn invalid_ids_sum(ranges: &[RangeInclusive<u64>], pred: fn(&u64) -> bool) -> u64 {
