@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 anyhow = "*"
+itertools = "0.14.0"
+num = "0.4.3"
