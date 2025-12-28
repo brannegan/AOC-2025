@@ -23,7 +23,25 @@ impl TryFrom<char> for Dir {
 #[derive(Debug, Clone, Copy)]
 struct Rotation {
     dir: Dir,
-    distance: u16,
+    distance: i16,
+}
+
+impl Rotation {
+    fn count_zero_passes(&self, pos: i16) -> (i16, i16) {
+        let full_circles = (self.distance / 100).abs();
+        let dist_rem = self.distance % 100;
+        let clockwise_sign = match self.dir {
+            Dir::Left => -1,
+            Dir::Right => 1,
+        };
+        let next_pos = pos + dist_rem * clockwise_sign;
+        let zero_pass = if (next_pos > 0 && next_pos < 100) || pos == 0 {
+            0
+        } else {
+            1
+        };
+        ((100 + next_pos) % 100, full_circles + zero_pass)
+    }
 }
 
 impl FromStr for Rotation {
@@ -39,24 +57,36 @@ impl FromStr for Rotation {
 
 fn main() -> Result<()> {
     let input = read_to_string("inputs/day01-input1.txt")?;
-    let answer = count_dial_is_zero(input.trim(), 50)?;
-    println!("answer is: {answer}");
+    let answer = count_dial_finished_zero(input.trim(), 50)?;
+    println!("part 1 answer is: {answer}");
+    let answer = count_dials_crosses_zero(input.trim(), 50)?;
+    println!("part 2 answer is: {answer}");
     Ok(())
 }
 
-fn count_dial_is_zero(input: &str, start_pos: i16) -> Result<u32> {
+fn count_dial_finished_zero(input: &str, start_pos: i16) -> Result<u32> {
     let (_last_pos, zeros) = input.lines().map(Rotation::from_str).try_fold(
         (start_pos, 0),
         |(cur_pos, zeros), rot_parsed| {
             let rot = rot_parsed?;
             let new_pos = match rot.dir {
-                Dir::Left => (cur_pos - rot.distance as i16) % 100,
-                Dir::Right => (cur_pos + rot.distance as i16) % 100,
+                Dir::Left => (cur_pos - rot.distance + 100) % 100,
+                Dir::Right => (cur_pos + rot.distance) % 100,
             };
             Ok((new_pos, if new_pos == 0 { zeros + 1 } else { zeros }))
         },
     )?;
     Ok(zeros)
+}
+
+fn count_dials_crosses_zero(input: &str, start_pos: i16) -> Result<i16> {
+    Ok(input.lines().map(Rotation::from_str).try_fold(
+        (start_pos, 0),
+        |(cur_pos, zeros), rot_parsed| {
+            let (next_pos, cur_zeros) = rot_parsed?.count_zero_passes(cur_pos);
+            Ok((next_pos, zeros + cur_zeros))
+        },
+    )?.1)
 }
 
 #[cfg(test)]
@@ -76,8 +106,13 @@ R14
 L82
 "#;
     #[test]
-    fn task_input() -> Result<()> {
-        assert_eq!(count_dial_is_zero(INPUT.trim(), 50)?, 3);
+    fn part1() -> Result<()> {
+        assert_eq!(count_dial_finished_zero(INPUT.trim(), 50)?, 3);
+        Ok(())
+    }
+    #[test]
+    fn part2() -> Result<()> {
+        assert_eq!(count_dials_crosses_zero(INPUT.trim(), 50)?, 6);
         Ok(())
     }
 }
