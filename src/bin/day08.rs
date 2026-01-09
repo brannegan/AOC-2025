@@ -12,6 +12,15 @@ struct JBoxes {
 }
 
 impl JBoxes {
+    fn new(jboxes: Vec<I64Vec3>) -> Self {
+        Self {
+            jboxes,
+            circuits: vec![],
+            last_conn: [I64Vec3::ZERO; 2],
+        }
+    }
+
+// TODO: make it as iterator
     fn min_distances(&self) -> impl Iterator<Item = [usize; 2]> + use<> {
         let mut result = vec![];
         for i in 0..self.jboxes.len() {
@@ -67,11 +76,7 @@ fn parse(input: &str) -> JBoxes {
             I64Vec3::from_array(arr)
         })
         .collect();
-    JBoxes {
-        jboxes,
-        circuits: vec![],
-        last_conn: [I64Vec3::ZERO; 2],
-    }
+    JBoxes::new(jboxes)
 }
 
 fn main() -> Result<()> {
