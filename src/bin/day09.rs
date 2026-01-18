@@ -46,7 +46,7 @@ impl RedTileList {
         self.coords
             .iter()
             .zip(self.coords.iter().skip(1))
-            .map(|(a,b)| [*a,*b])
+            .map(|(a, b)| [*a, *b])
             .any(|poly_edge| {
                 let (ax, ay) = ranges_from_edge(edge);
                 let (bx, by) = ranges_from_edge(poly_edge);
