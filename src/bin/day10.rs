@@ -5,7 +5,7 @@ use nom::character::complete::{line_ending, one_of, space1, usize};
 use nom::multi::{many1, separated_list0, separated_list1};
 use nom::sequence::delimited;
 use nom::{Finish, Parser};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fs::read_to_string;
 
 #[derive(Debug, Clone)]
@@ -57,8 +57,8 @@ impl Machine {
     }
     fn min_buttons_seq(&mut self) -> usize {
         let mut min = usize::MAX;
-        let mut btn_queue = Vec::from_iter((0..self.buttons.len()).map(|btn_i| vec![btn_i]));
-        while let Some(btn_history) = btn_queue.pop() {
+        let mut btn_queue = VecDeque::from_iter((0..self.buttons.len()).map(|btn_i| vec![btn_i]));
+        while let Some(btn_history) = btn_queue.pop_front() {
             self.lights_reset();
             if btn_history.len() > min || self.has_light_state_cycle(&btn_history) {
                 continue;
@@ -71,7 +71,7 @@ impl Machine {
                 for btn_i in (0..self.buttons.len()).filter(|btn_i| btn_i != last_btn_pressed) {
                     let mut next = btn_history.clone();
                     next.push(btn_i);
-                    btn_queue.push(next);
+                    btn_queue.push_back(next);
                 }
             }
         }
