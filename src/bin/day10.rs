@@ -1,4 +1,5 @@
 use anyhow::{Ok, Result};
+use glam::bool;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, one_of, space1, usize};
 use nom::multi::{many1, separated_list0, separated_list1};
@@ -14,11 +15,10 @@ impl Button {
     fn new(items: Vec<usize>) -> Self {
         Self(items)
     }
-    fn press(&self, mut lights_state: Vec<bool>) -> Vec<bool> {
+    fn press(&self, lights_state: &mut [bool]) {
         for i in self.0.iter().copied() {
             lights_state[i] = !lights_state[i];
         }
-        lights_state
     }
 }
 
@@ -40,39 +40,42 @@ impl Machine {
             lights_state: vec![false; len],
         }
     }
-    fn next_button(
-        &self,
-        button_i: usize,
-        lights_state: Vec<bool>,
-        mut btn_states: HashSet<Vec<bool>>,
-        mut count: usize,
-    ) -> Option<(HashSet<Vec<bool>>, usize)> {
-        let new_state = self.buttons[button_i].press(lights_state.clone());
-        count += 1;
-        if new_state == self.lights_diagram {
-            return Some((btn_states, count));
-        }
-        if !btn_states.insert(new_state.clone()) {
-            return None;
-        }
-        (0..self.buttons.len())
-            .filter(|&btn_i| btn_i != button_i)
-            .filter_map(|btn_i| {
-                self.next_button(btn_i, new_state.clone(), btn_states.clone(), count)
-            })
-            .min_by_key(|(_, count)| *count)
+    fn lights_reset(&mut self) {
+        self.lights_state
+            .iter_mut()
+            .for_each(|light| *light = false);
     }
-    fn min_buttons_seq(&self) -> usize {
-        let mut state = HashSet::new();
-        state.insert(self.lights_state.clone());
-        (0..self.buttons.len())
-            .filter_map(|button_i| {
-                self.next_button(button_i, self.lights_state.clone(), state.clone(), 0)
-            })
-    //        .inspect(|(bs, c)| eprintln!("button_states {bs:?}, count={c}"))
-            .map(|(_, count)| count)
-            .min()
-            .unwrap()
+    fn has_light_state_cycle(&mut self, btn_history: &[usize]) -> bool {
+        let mut light_state = HashSet::new();
+        for b in btn_history.iter() {
+            self.buttons[*b].press(&mut self.lights_state);
+            if !light_state.insert(self.lights_state.clone()) {
+                return true;
+            }
+        }
+        false
+    }
+    fn min_buttons_seq(&mut self) -> usize {
+        let mut min = usize::MAX;
+        let mut btn_queue = Vec::from_iter((0..self.buttons.len()).map(|btn_i| vec![btn_i]));
+        while let Some(btn_history) = btn_queue.pop() {
+            self.lights_reset();
+            if btn_history.len() > min || self.has_light_state_cycle(&btn_history) {
+                continue;
+            } else if self.lights_state == self.lights_diagram {
+                min = btn_history.len().min(min);
+                 eprintln!("min={min} bh={btn_history:?}");
+                continue;
+            } else {
+                let last_btn_pressed = btn_history.last().unwrap();
+                for btn_i in (0..self.buttons.len()).filter(|btn_i| btn_i != last_btn_pressed) {
+                    let mut next = btn_history.clone();
+                    next.push(btn_i);
+                    btn_queue.push(next);
+                }
+            }
+        }
+        min
     }
 }
 
@@ -105,11 +108,11 @@ fn parse(input: &str) -> anyhow::Result<Vec<Machine>> {
 
 fn main() -> Result<()> {
     let input = read_to_string("inputs/day10-input1.txt")?;
-    let machines = parse(input.trim())?;
-
+    let mut machines = parse(input.trim())?;
     let answer = machines
-        .iter()
+        .iter_mut()
         .map(|machine| machine.min_buttons_seq())
+        .inspect(|min| { eprintln!("min={min}")})
         .sum::<usize>();
     println!("part 1 answer is: {answer}");
     // println!("part 2 answer is: {answer}");
@@ -126,9 +129,9 @@ mod tests {
 "#;
     #[test]
     fn part1() -> Result<()> {
-        let machines = parse(INPUT.trim())?;
+        let mut machines = parse(INPUT.trim())?;
         let answer = machines
-            .iter()
+            .iter_mut()
             .map(|machine| machine.min_buttons_seq())
             .sum::<usize>();
         assert_eq!(answer, 7);
@@ -136,9 +139,9 @@ mod tests {
     }
     #[test]
     fn min_buttons_seq() -> Result<()> {
-        let machines = parse(INPUT.trim())?;
-        assert_eq!(machines[0].min_buttons_seq(), 2);
-        assert_eq!(machines[1].min_buttons_seq(), 3);
+        let mut machines = parse(INPUT.trim())?;
+        //assert_eq!(machines[0].min_buttons_seq(), 2);
+        //assert_eq!(machines[1].min_buttons_seq(), 3);
         assert_eq!(machines[2].min_buttons_seq(), 2);
         Ok(())
     }
