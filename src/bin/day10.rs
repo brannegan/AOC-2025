@@ -20,13 +20,29 @@ impl Button {
             lights_state[i] = !lights_state[i];
         }
     }
+    fn press_counters(&self, mut counters: Vec<usize>) -> Option<(Vec<usize>, usize)> {
+        if self.0.iter().any(|i| counters[*i] == 0) {
+            return None;
+        }
+        let min_pressed = self
+            .0
+            .iter()
+            .copied()
+            .map(|btn_i| counters[btn_i])
+            .min()
+            .expect("min not found");
+        for i in self.0.iter().copied() {
+            counters[i] -= min_pressed;
+        }
+        Some((counters, min_pressed))
+    }
 }
 
 #[derive(Debug, Clone)]
 struct Machine {
     lights_diagram: Vec<bool>,
     buttons: Vec<Button>,
-    _joltage_req: Vec<usize>,
+    joltage_req: Vec<usize>,
     lights_state: Vec<bool>,
 }
 
@@ -36,7 +52,7 @@ impl Machine {
         Self {
             lights_diagram: light_diagram,
             buttons,
-            _joltage_req: joltage_req,
+            joltage_req,
             lights_state: vec![false; len],
         }
     }
@@ -64,7 +80,6 @@ impl Machine {
                 continue;
             } else if self.lights_state == self.lights_diagram {
                 min = btn_history.len().min(min);
-                 eprintln!("min={min} bh={btn_history:?}");
                 continue;
             } else {
                 let last_btn_pressed = btn_history.last().unwrap();
@@ -76,6 +91,35 @@ impl Machine {
             }
         }
         min
+    }
+    fn try_next_button(
+        &self,
+        button_i: usize,
+        counters: Vec<usize>,
+        pressed_so_far: usize,
+    ) -> Option<(Vec<usize>, usize)> {
+        let (new_counters, pressed_now) = self.buttons[button_i].press_counters(counters)?;
+        //  eprintln!(
+        //      "btn={button_i}, counters={:?}, {pressed_so_far}, {pressed_now}",
+        //      new_counters
+        // );
+        if new_counters == vec![0; self.joltage_req.len()] {
+            return Some((new_counters, pressed_so_far + pressed_now));
+        }
+        (0..self.buttons.len())
+            .filter(|&btn_i| btn_i != button_i)
+            .filter_map(|btn_i| {
+                self.try_next_button(btn_i, new_counters.clone(), pressed_so_far + pressed_now)
+            })
+            .min_by_key(|(_, count)| *count)
+    }
+    fn min_buttons_joltage(&self) -> usize {
+        (0..self.buttons.len())
+            .filter_map(|button_i| self.try_next_button(button_i, self.joltage_req.clone(), 0))
+            //.inspect(|(counters, pressed)| eprintln!("counters {counters:?}, pressed={pressed}"))
+            .map(|(_, pressed)| pressed)
+            .min()
+            .unwrap()
     }
 }
 
@@ -107,14 +151,22 @@ fn parse(input: &str) -> anyhow::Result<Vec<Machine>> {
 }
 
 fn main() -> Result<()> {
+    //let input = read_to_string("inputs/day10-input1.txt")?;
+    //let mut machines = parse(input.trim())?;
+    //let answer = machines
+    //    .iter_mut()
+    //    .map(|machine| machine.min_buttons_seq())
+    //    //.inspect(|min| eprintln!("min={min}"))
+    //    .sum::<usize>();
+    //println!("part 1 answer is: {answer}");
     let input = read_to_string("inputs/day10-input1.txt")?;
-    let mut machines = parse(input.trim())?;
+    let machines = parse(input.trim())?;
     let answer = machines
-        .iter_mut()
-        .map(|machine| machine.min_buttons_seq())
-        .inspect(|min| { eprintln!("min={min}")})
+        .iter()
+        .map(|machine| machine.min_buttons_joltage())
+        //.inspect(|min| eprintln!("min={min}"))
         .sum::<usize>();
-    println!("part 1 answer is: {answer}");
+    println!("part 2 answer is: {answer}");
     // println!("part 2 answer is: {answer}");
     Ok(())
 }
@@ -138,18 +190,21 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn min_buttons_seq() -> Result<()> {
+    fn part2() -> Result<()> {
         let mut machines = parse(INPUT.trim())?;
-        //assert_eq!(machines[0].min_buttons_seq(), 2);
-        //assert_eq!(machines[1].min_buttons_seq(), 3);
-        assert_eq!(machines[2].min_buttons_seq(), 2);
+        let answer = machines
+            .iter_mut()
+            .map(|machine| machine.min_buttons_joltage())
+            .sum::<usize>();
+        assert_eq!(answer, 33);
         Ok(())
     }
-    // #[test]
-    // fn part2() -> Result<()> {
-    //     let mut machines = parse(INPUT.trim());
-    //     let answer = 0;
-    //     assert_eq!(answer, 24);
-    //     Ok(())
-    // }
+    #[test]
+    fn part2_min_buttons_seq() -> Result<()> {
+        let machines = parse(INPUT.trim())?;
+        assert_eq!(machines[0].min_buttons_joltage(), 10);
+        assert_eq!(machines[1].min_buttons_joltage(), 12);
+        assert_eq!(machines[2].min_buttons_joltage(), 11);
+        Ok(())
+    }
 }
