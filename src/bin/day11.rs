@@ -75,6 +75,7 @@ impl AttachedDevices {
 
         algo::all_simple_paths::<HashSet<_>, _, RandomState>(&self.graph, svr, out, 0, None)
             .filter(|h| h.contains(&dac) && h.contains(&fft))
+            .take(10)
             .count()
     }
 }
