@@ -1,8 +1,10 @@
 use anyhow::{Ok, Result};
 use itertools::Itertools;
+use petgraph::algo::toposort;
+use petgraph::graph::NodeIndex;
 use petgraph::{Graph, algo};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::hash::RandomState;
 
@@ -38,7 +40,7 @@ impl AttachedDevices {
             });
         self
     }
-    fn path_count(&self) -> usize {
+    fn path_count_you_out(&self) -> usize {
         let you = self
             .graph
             .node_indices()
@@ -51,32 +53,43 @@ impl AttachedDevices {
             .expect("out not found");
         algo::all_simple_paths::<Vec<_>, _, RandomState>(&self.graph, you, out, 1, None).count()
     }
-    fn path_count_fft_dac(&self) -> usize {
-        let svr = self
-            .graph
-            .node_indices()
-            .find(|ni| self.graph[*ni] == ['s', 'v', 'r'])
-            .expect("srv not found");
-        let out = self
-            .graph
-            .node_indices()
-            .find(|ni| self.graph[*ni] == ['o', 'u', 't'])
+    fn path_count(&self, topo: &[NodeIndex]) -> usize {
+        let mut path_counter_map: HashMap<[char; 3], usize> =
+            HashMap::from_iter(topo.iter().map(|ni| (self.graph[*ni], 0)));
+        path_counter_map
+            .entry(self.graph[topo[0]])
+            .and_modify(|counter| *counter += 1);
+        for source_ni in topo {
+            for target_ni in self.graph.neighbors(*source_ni) {
+                let source_path_count = path_counter_map[&self.graph[*source_ni]];
+                path_counter_map
+                    .entry(self.graph[target_ni])
+                    .and_modify(|counter| *counter += source_path_count);
+            }
+        }
+        path_counter_map[&self.graph[*topo.last().unwrap()]]
+    }
+    fn path_count_srv_out(&self) -> usize {
+        let toposorted = toposort(&self.graph, None).expect("cycle in graph");
+        let svr = toposorted
+            .iter()
+            .position(|ni| self.graph[*ni] == ['s', 'v', 'r'])
+            .expect("svr not found");
+        let fft = toposorted
+            .iter()
+            .position(|ni| self.graph[*ni] == ['f', 'f', 't'])
+            .expect("fft not found");
+        let dac = toposorted
+            .iter()
+            .position(|ni| self.graph[*ni] == ['d', 'a', 'c'])
+            .expect("dac not found");
+        let out = toposorted
+            .iter()
+            .position(|ni| self.graph[*ni] == ['o', 'u', 't'])
             .expect("out not found");
-        let dac = self
-            .graph
-            .node_indices()
-            .find(|ni| self.graph[*ni] == ['d', 'a', 'c'])
-            .expect("srv not found");
-        let fft = self
-            .graph
-            .node_indices()
-            .find(|ni| self.graph[*ni] == ['f', 'f', 't'])
-            .expect("srv not found");
-
-        algo::all_simple_paths::<HashSet<_>, _, RandomState>(&self.graph, svr, out, 0, None)
-            .filter(|h| h.contains(&dac) && h.contains(&fft))
-            .take(10)
-            .count()
+        self.path_count(&toposorted[svr..=fft])
+            * self.path_count(&toposorted[fft..=dac])
+            * self.path_count(&toposorted[dac..=out])
     }
 }
 
@@ -101,9 +114,9 @@ fn main() -> Result<()> {
     let input = read_to_string("inputs/day11-input1.txt")?;
     let devices = parse(input.trim());
     let devices = devices.build_graph();
-    // let answer = devices.path_count();
-    // println!("part 1 answer is: {answer}");
-    let answer = devices.path_count_fft_dac();
+    let answer = devices.path_count_you_out();
+    println!("part 1 answer is: {answer}");
+    let answer = devices.path_count_srv_out();
     println!("part 2 answer is: {answer}");
     Ok(())
 }
@@ -143,14 +156,14 @@ hhh: out
     #[test]
     fn part1() -> Result<()> {
         let devices = parse(INPUT.trim());
-        let answer = devices.build_graph().path_count();
+        let answer = devices.build_graph().path_count_you_out();
         assert_eq!(answer, 5);
         Ok(())
     }
     #[test]
     fn part2() -> Result<()> {
         let devices = parse(INPUT2.trim());
-        let answer = devices.build_graph().path_count_fft_dac();
+        let answer = devices.build_graph().path_count_srv_out();
         assert_eq!(answer, 2);
         Ok(())
     }
