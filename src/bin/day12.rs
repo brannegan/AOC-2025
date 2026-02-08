@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::{Ok, Result};
 use itertools::Itertools;
 use nom::bytes::complete::tag;
@@ -80,7 +81,6 @@ impl Region {
         }
     }
     fn add_shape(mut self, shape: Shape, r: usize, c: usize) -> Option<Self> {
-        //eprintln!("r={r},c={c} -- {},{}:{self}",self.state[0].len(), self.state.len());
         for i in 0..3 {
             for j in 0..3 {
                 self.state[r + i][c + j] += shape.0[i][j];
@@ -119,7 +119,6 @@ impl Region {
                     .filter(|(r, c)| cur.state[*r][*c] == 0)
                     .filter_map(|(r, c)| cur.clone().add_shape(*shape, r, c))
             }));
-            // eprintln!("{}",queue.len());
         }
         false
     }
@@ -128,6 +127,50 @@ impl Region {
 struct Tetris {
     shapes: Vec<Shape>,
     regions: Vec<Region>,
+}
+
+impl Tetris {
+    fn stats(&self) {
+        let shapes_occupied_space: Vec<_> = self
+            .shapes
+            .iter()
+            .map(|shape| shape.0.iter().flatten().filter(|h| **h == 1).count())
+            .collect();
+        for region in &self.regions {
+            let occupied_total: usize = region
+                .shape_ids
+                .iter()
+                .enumerate()
+                .map(|(i, c)| shapes_occupied_space[i] * c)
+                .sum();
+            println!(
+                "{}x{} {:?}: occupied {occupied_total} vs total {}",
+                region.state[0].len(),
+                region.state.len(),
+                region.shape_ids,
+                region.state[0].len() * region.state.len()
+            );
+        }
+    }
+    fn fit_heuristic(&self) -> usize {
+        let shapes_occupied_space: Vec<_> = self
+            .shapes
+            .iter()
+            .map(|shape| shape.0.iter().flatten().filter(|h| **h == 1).count())
+            .collect();
+        self.regions
+            .iter()
+            .filter(|region| {
+                region
+                    .shape_ids
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| shapes_occupied_space[i] * c)
+                    .sum::<usize>()
+                    < region.state[0].len() * region.state.len()
+            })
+            .count()
+    }
 }
 
 fn parse(input: &str) -> anyhow::Result<Tetris> {
@@ -167,7 +210,7 @@ fn parse(input: &str) -> anyhow::Result<Tetris> {
 fn main() -> Result<()> {
     let input = read_to_string("inputs/day12-input1.txt")?;
     let tree_farm = parse(input.trim())?;
-    let answer = 0;
+    let answer = tree_farm.fit_heuristic();
     println!("part 1 answer is: {answer}");
     // let answer = 0
     // println!("part 2 answer is: {answer}");
@@ -232,14 +275,4 @@ mod tests {
         assert!(!region2.shapes_fit(&tree_farm.shapes));
         Ok(())
     }
-    // #[test]
-    // fn part2() -> Result<()> {
-    //     let mut machines = parse(INPUT.trim())?;
-    //     let answer = machines
-    //         .iter_mut()
-    //         .map(|machine| machine.min_buttons_joltage())
-    //         .sum::<usize>();
-    //     assert_eq!(answer, 33);
-    //     Ok(())
-    // }
 }
